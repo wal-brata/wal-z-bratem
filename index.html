@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Whack Game – Mobile & Desktop Edition</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: url("background.png") center / cover no-repeat fixed;
+      background-color: #222; /* Fallback */
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden; /* Blokuje scrollowanie podczas szybkiego klikania */
+      touch-action: manipulation; /* Optymalizacja dotyku */
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      width: 90%;
+      max-width: 520px;
+      text-align: center;
+    }
+
+    h1 { margin: 0 0 10px 0; font-size: 24px; }
+
+    .stats {
+      margin-bottom: 10px;
+      font-size: 16px;
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 12px;
+    }
+
+    .arena {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .hole {
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle at 50% 60%, #444, #222 70%);
+      border-radius: 50%;
+      overflow: hidden; 
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .target {
+      width: 56px;
+      height: 56px;
+      transform: translateY(110%);
+      transition: transform 0.1s ease-out;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .hole.active .target {
+      transform: translateY(0%);
+      pointer-events: auto;
+    }
+
+    /* --- FONTANNA MLEKA --- */
+    .fountain {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .milk-drop {
+      position: absolute;
+      width: 4px;
+      height: 12px;
+      background: #ffffff;
+      border-radius: 50% 50% 40% 40%;
+      opacity: 0;
+    }
+
+    .hole.hit .d1 { animation: milk-spurt 0.4s ease-out forwards; --rx: -18px; --ry: -55px; --rot: -25deg; }
+    .hole.hit .d2 { animation: milk-spurt 0.45s ease-out 0.05s forwards; --rx: -6px; --ry: -70px; --rot: -8deg; }
+    .hole.hit .d3 { animation: milk-spurt 0.4s ease-out 0.02s forwards; --rx: 6px; --ry: -65px; --rot: 10deg; }
+    .hole.hit .d4 { animation: milk-spurt 0.5s ease-out forwards; --rx: 18px; --ry: -50px; --rot: 28deg; }
+    .hole.hit .d5 { animation: milk-spurt 0.35s ease-out 0.1s forwards; --rx: 0px; --ry: -75px; --rot: 0deg; }
+
+    @keyframes milk-spurt {
+      0% { opacity: 0; transform: translate(0, 0) scale(0.5) rotate(0deg); }
+      20% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--rx), var(--ry)) scale(1.3) rotate(var(--rot)); }
+    }
+
+    button {
+      padding: 12px 30px;
+      border-radius: 12px;
+      border: none;
+      background: #fff;
+      color: #000;
+      font-weight: bold;
+      font-size: 18px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    button:active { transform: scale(0.95); }
+
+    /* Ukrywanie przycisku */
+    .hidden { display: none; }
+
+    /* SKALOWANIE NA SMARTFONY */
+    @media (max-width: 480px) {
+      .hole { width: 62px; height: 62px; }
+      .target { width: 44px; height: 44px; }
+      .row { gap: 6px; }
+      .arena { gap: 6px; }
+      h1 { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glass">
+    <h1>Whack Game 🎯</h1>
+    <div class="stats">
+      Punkty: <span id="score">0</span> |
+      Czas: <span id="time">60</span>s |
+      Tryb: <span id="mode">Dysk</span>
+    </div>
+
+    <div class="arena" id="arena"></div>
+
+    <button id="startBtn">START</button>
+  </div>
+
+  <script>
+    const arena = document.getElementById("arena");
+    const scoreEl = document.getElementById("score");
+    const timeEl = document.getElementById("time");
+    const modeEl = document.getElementById("mode");
+    const startBtn = document.getElementById("startBtn");
+
+    let holes = [];
+    let score = 0;
+    let time = 60;
+    let moleSpeed = 800;
+    let moleInterval, timerInterval, speedInterval;
+    let currentMoleIndex = null;
+    let clickedCurrent = false;
+
+    // Detekcja czy smartfon (dotyk + mały ekran)
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    modeEl.textContent = isMobile ? "Mobilny (Trudny)" : "Desktop";
+
+    function createLayout() {
+      arena.innerHTML = "";
+      const counts = [5, 4, 5];
+      counts.forEach(count => {
+        const row = document.createElement("div");
+        row.className = "row";
+        for (let i = 0; i < count; i++) {
+          const hole = document.createElement("div");
+          hole.className = "hole";
+          hole.innerHTML = `
+            <div class="fountain">
+              <div class="milk-drop d1"></div>
+              <div class="milk-drop d2"></div>
+              <div class="milk-drop d3"></div>
+              <div class="milk-drop d4"></div>
+              <div class="milk-drop d5"></div>
+            </div>
+            <img src="mole.png" class="target">
+          `;
+          row.appendChild(hole);
+          holes.push(hole);
+
+          // Obsługa kliknięcia/dotyku
+          const handleHit = (e) => {
+            e.preventDefault(); // Zapobiega zoomowaniu na smartfonach
+            if (hole.classList.contains("active") && !clickedCurrent) {
+              clickedCurrent = true;
+              score += 10;
+              updateScore();
+              hole.classList.remove("active");
+              hole.classList.add("hit");
+              setTimeout(() => hole.classList.remove("hit"), 500);
+            }
+          };
+
+          hole.addEventListener("mousedown", handleHit);
+          hole.addEventListener("touchstart", handleHit);
+        }
+        arena.appendChild(row);
+      });
+    }
+
+    function updateScore() {
+      scoreEl.textContent = score;
+      // Opcjonalnie: kolorowanie wyniku
+      scoreEl.style.color = score < 0 ? "#ff6666" : "#66ff66";
+    }
+
+    function randomHole() {
+      // Kara za pominięcie
+      if (currentMoleIndex !== null && !clickedCurrent) {
+        score -= 5;
+        updateScore();
+      }
+      
+      holes.forEach(h => h.classList.remove("active"));
+      
+      const index = Math.floor(Math.random() * holes.length);
+      currentMoleIndex = index;
+      clickedCurrent = false;
+      holes[index].classList.add("active");
+    }
+
+    function startGame() {
+      // 1. Reset parametrów
+      score = 0;
+      time = 60;
+      updateScore();
+      timeEl.textContent = time;
+
+      // 2. Prędkość zależna od urządzenia
+      // Na desktop startujemy od 800ms, na mobile od 550ms (dużo szybciej!)
+      moleSpeed = isMobile ? 550 : 800;
+
+      // 3. Ukrycie przycisku
+      startBtn.classList.add("hidden");
+
+      // 4. Czyszczenie starych interwałów
+      clearInterval(moleInterval);
+      clearInterval(timerInterval);
+      clearInterval(speedInterval);
+
+      // 5. Start pętli
+      moleInterval = setInterval(randomHole, moleSpeed);
+
+      timerInterval = setInterval(() => {
+        time--;
+        timeEl.textContent = time;
+        if (time <= 0) endGame();
+      }, 1000);
+
+      // 6. Przyspieszanie co 5 sekund
+      speedInterval = setInterval(() => {
+        // Na mobile przyspiesza agresywniej
+        let decrement = isMobile ? 45 : 60;
+        let minSpeed = isMobile ? 280 : 350;
+        
+        moleSpeed = Math.max(minSpeed, moleSpeed - decrement);
+        
+        clearInterval(moleInterval);
+        moleInterval = setInterval(randomHole, moleSpeed);
+      }, 5000);
+    }
+
+    function endGame() {
+      clearInterval(moleInterval);
+      clearInterval(timerInterval);
+      clearInterval(speedInterval);
+      
+      currentMoleIndex = null;
+      holes.forEach(h => h.classList.remove("active", "hit"));
+      
+      alert("Koniec gry! Twój wynik: " + score);
+      
+      // Pokazanie przycisku ponownie
+      startBtn.classList.remove("hidden");
+      startBtn.textContent = "ZAGRAJ PONOWNIE";
+    }
+
+    createLayout();
+    startBtn.addEventListener("click", startGame);
+  </script>
+</body>
+</html>
