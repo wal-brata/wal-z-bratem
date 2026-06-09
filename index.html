@@ -148,8 +148,7 @@
     <div class="stats">
       Punkty: <span id="score">0</span> |
       Najwyższy: <span id="highscore">0</span> |
-      Czas: <span id="time">30</span>s |
-      Tryb: <span id="mode">Dysk</span>
+      Czas: <span id="time">30</span>s
     </div>
 
     <div class="arena" id="arena"></div>
@@ -162,24 +161,19 @@
     const scoreEl = document.getElementById("score");
     const highscoreEl = document.getElementById("highscore");
     const timeEl = document.getElementById("time");
-    const modeEl = document.getElementById("mode");
     const startBtn = document.getElementById("startBtn");
 
     let holes = [];
     let score = 0;
     let highscore = localStorage.getItem("whack_highscore") ? parseInt(localStorage.getItem("whack_highscore")) : 0;
     let time = 30;
-    let moleSpeed = 800;
+    let moleSpeed = 550;
     let moleInterval, timerInterval, speedInterval;
     let currentMoleIndex = null;
     let clickedCurrent = false;
 
     // Wyświetlenie zapisanego rekordu na starcie
     highscoreEl.textContent = highscore;
-
-    // Detekcja czy smartfon (dotyk + mały ekran)
-    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-    modeEl.textContent = isMobile ? "Mobilny (Trudny)" : "Desktop";
 
     function createLayout() {
       arena.innerHTML = "";
@@ -261,9 +255,8 @@
       updateScore();
       timeEl.textContent = time;
 
-      // 2. Prędkość zależna od urządzenia
-      // Na desktop startujemy od 800ms, na mobile od 550ms (dużo szybciej!)
-      moleSpeed = isMobile ? 550 : 800;
+      // 2. Szybkie tempo startowe (takie samo dla PC i Mobile)
+      moleSpeed = 550;
 
       // 3. Ukrycie przycisku
       startBtn.classList.add("hidden");
@@ -282,11 +275,10 @@
         if (time <= 0) endGame();
       }, 1000);
 
-      // 6. Przyspieszanie co 5 sekund
+      // 6. Dynamiczne przyspieszanie co 5 sekund
       speedInterval = setInterval(() => {
-        // Na mobile przyspiesza agresywniej
-        let decrement = isMobile ? 45 : 60;
-        let minSpeed = isMobile ? 280 : 350;
+        let decrement = 45;
+        let minSpeed = 280;
         
         moleSpeed = Math.max(minSpeed, moleSpeed - decrement);
         
